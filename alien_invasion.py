@@ -8,6 +8,7 @@ from bullet import Bullet
 from alien import Alien
 from game_stats import GameStats
 from button import Button
+from scoreboard import Scoreboard
 
 
 class AlienInvasion:
@@ -18,18 +19,18 @@ class AlienInvasion:
         self.clock = pygame.time.Clock()
         self.settings = Settings()
 
-        self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-        self.settings.screen_width = self.screen.get_rect().width
-        self.settings.screen_height = self.screen.get_rect().height
+        self.screen = pygame.display.set_mode(
+            (self.settings.screen_width, self.settings.screen_height)
+        )
 
         pygame.display.set_caption("Alien Invasion")
 
         self.stats = GameStats(self)
+        self.sb = Scoreboard(self)
 
         self.ship = Ship(self)
         self.bullets = pygame.sprite.Group()
         self.aliens = pygame.sprite.Group()
-        self.game_active = True
 
         self._create_fleet()
 
@@ -41,10 +42,12 @@ class AlienInvasion:
         """Запускает основной цикл игры"""
         while True:
             self._check_events()
+
             if self.game_active:
                 self.ship.update()
                 self._update_bullets()
                 self._update_aliens()
+
             self._update_screen()
             self.clock.tick(60)
 
@@ -52,7 +55,7 @@ class AlienInvasion:
         """Обрабатывает столкновение с кораблем"""
         if self.stats.ships_left > 0:
             self.stats.ships_left -= 1
-
+            self.sb.prep_ships()
             self.aliens.empty()
             self.bullets.empty()
 
@@ -113,6 +116,9 @@ class AlienInvasion:
         if button_clicked and not self.game_active:
             self.settings.initialize_dynamic_settings()
             self.stats.reset_stats()
+            self.sb.prep_score()
+            self.sb.prep_level()
+            self.sb.prep_ships()
             self.game_active = True
 
             self.bullets.empty()
@@ -164,10 +170,19 @@ class AlienInvasion:
     def _check_bullet_alien_collision(self):
         """Обрабатывает коллизии снарядов с пришельцами"""
         collisions = pygame.sprite.groupcollide(self.bullets, self.aliens, True, True)
+        if collisions:
+            for aliens in collisions.values():
+                self.stats.score += self.settings.alien_points * len(aliens)
+            self.stats.score += self.settings.alien_points
+            self.sb.prep_score()
+            self.sb.check_high_score()
         if not self.aliens:
             self.bullets.empty()
             self._create_fleet()
             self.settings.increase_speed()
+
+            self.stats.level += 1
+            self.sb.prep_level()
 
     def _update_screen(self):
         """Обновляет изображение экрана и отображает новый экран"""
@@ -176,6 +191,8 @@ class AlienInvasion:
             bullet.draw_bullet()
         self.ship.blitme()
         self.aliens.draw(self.screen)
+
+        self.sb.show_score()
 
         if not self.game_active:
             self.play_button.draw_button()
